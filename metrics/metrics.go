@@ -8,6 +8,7 @@ import (
 type Counters struct {
 	cfg             *config.Config
 	AvailableAmount prometheus.Gauge
+	PrepaidTraffic  prometheus.Gauge
 	TotalInstances  *prometheus.GaugeVec
 }
 
@@ -39,4 +40,11 @@ func (c *Counters) register() {
 	c.TotalInstances = totalInstances
 	totalInstances.Reset()
 
+	prepaidTraffic := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "prepaid_traffic",
+			Help: "Total traffic available.",
+		})
+	prometheus.MustRegister(prepaidTraffic)
+	c.PrepaidTraffic = prepaidTraffic
 }

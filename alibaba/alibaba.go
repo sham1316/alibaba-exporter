@@ -4,6 +4,10 @@ import (
 	"alibaba-exporter/config"
 	"alibaba-exporter/metrics"
 	"context"
+	bssopenapi20171214 "github.com/alibabacloud-go/bssopenapi-20171214/v6/client"
+	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	util "github.com/alibabacloud-go/tea-utils/v2/service"
+	"github.com/alibabacloud-go/tea/tea"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
@@ -18,12 +22,14 @@ import (
 type Alibaba interface {
 	GetAccountBalance(ctx context.Context) float64
 	MainLoop(ctx context.Context)
+	GetPrepaidTraffic(ctx context.Context) float64
 }
 
 type alibaba struct {
-	cfg      *config.Config
-	client   *bssopenapi.Client
-	counters *metrics.Counters
+	cfg            *config.Config
+	client         *bssopenapi.Client
+	client20171214 *bssopenapi20171214.Client
+	counters       *metrics.Counters
 }
 
 func NewAlibaba(cfg *config.Config, counters *metrics.Counters) (Alibaba, error) {
@@ -31,15 +37,28 @@ func NewAlibaba(cfg *config.Config, counters *metrics.Counters) (Alibaba, error)
 	sdkConfig.Scheme = "https"
 	cred := credentials.NewAccessKeyCredential(cfg.AlibabaConf.AccessKeyId, string(cfg.AlibabaConf.AccessKeySecret))
 	client, _err := bssopenapi.NewClientWithOptions(cfg.AlibabaConf.RegionId, sdkConfig, cred)
+	if _err != nil {
+		return nil, _err
+	}
+
+	config := &openapi.Config{
+		AccessKeyId:     tea.String(cfg.AlibabaConf.AccessKeyId),
+		AccessKeySecret: tea.String(string(cfg.AlibabaConf.AccessKeySecret)),
+	}
+	// See https://api.alibabacloud.com/product/BssOpenApi.
+	config.Endpoint = tea.String("business.ap-southeast-1.aliyuncs.com")
+	client20171214 := &bssopenapi20171214.Client{}
+	client20171214, _err = bssopenapi20171214.NewClient(config)
 
 	if _err != nil {
 		return nil, _err
 	}
 
 	alibaba := &alibaba{
-		cfg:      cfg,
-		client:   client,
-		counters: counters,
+		cfg:            cfg,
+		client:         client,
+		client20171214: client20171214,
+		counters:       counters,
 	}
 	return alibaba, nil
 }
@@ -57,6 +76,52 @@ func (a *alibaba) GetAccountBalance(ctx context.Context) (availableAmount float6
 	zap.S().Debugf("GetAccountBalance: %0.2f", availableAmount)
 	return availableAmount
 }
+func (a *alibaba) GetPrepaidTraffic(ctx context.Context) (totalTraffic float64) {
+	totalTraffic = 0
+	_pageSize := int32(100)
+	request := &bssopenapi20171214.QueryResourcePackageInstancesRequest{
+		PageSize: &_pageSize,
+	}
+	// TODO getAllPages
+	runtime := &util.RuntimeOptions{}
+	if _result, _err := a.client20171214.QueryResourcePackageInstancesWithOptions(request, runtime); _err != nil {
+		zap.S().Warn(_err)
+		return
+	} else {
+		for i := range _result.Body.Data.Instances.Instance {
+			instance := _result.Body.Data.Instances.Instance[i]
+			zap.S().Debugf("Instance(%s): %s %s (%s)", *instance.InstanceId, *instance.RemainingAmount, *instance.RemainingAmountUnit, *instance.Status)
+			if *instance.Status == "Available" {
+				size, _ := strconv.ParseFloat(*instance.RemainingAmount, 64)
+				totalTraffic += size * unit2multi(*instance.RemainingAmountUnit)
+				zap.S().Debugf("%f total:  %f", size, totalTraffic)
+			}
+		}
+	}
+	return
+}
+
+const KB = 1024
+const MB = 1024 * KB
+const GB = 1024 * MB
+const TB = 1024 * GB
+
+func unit2multi(unit string) float64 {
+	switch unit {
+	case "TB":
+		return TB
+	case "GB":
+		return GB
+	case "MB":
+		return MB
+	case "KB":
+		return KB
+	case "Byte":
+		return 1
+	}
+	return 0
+}
+
 func (a *alibaba) GetTotalInstanceType(ctx context.Context, subscriptionType string) (totalInstances float64) {
 	request := bssopenapi.CreateQueryAvailableInstancesRequest()
 	request.SubscriptionType = subscriptionType
@@ -119,6 +184,7 @@ func (a *alibaba) MainLoop(ctx context.Context) {
 func (a *alibaba) getAlibabaMetrics(ctx context.Context) {
 	start := time.Now()
 	zap.S().Infof("%s start getAlibaba", start)
+	a.counters.PrepaidTraffic.Set(a.GetPrepaidTraffic(ctx))
 	a.counters.AvailableAmount.Set(a.GetAccountBalance(ctx))
 	makeVector(a.counters.TotalInstances, a.GetAllAvailableInstance(ctx))
 	a.GetDiskList(ctx)
