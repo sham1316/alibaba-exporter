@@ -1,9 +1,12 @@
 module alibaba-exporter
 
-go 1.19
+go 1.24.2
 
 require (
 	github.com/alibabacloud-go/bssopenapi-20171214/v6 v6.0.0
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.10
+	github.com/alibabacloud-go/tea v1.2.2
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.6
 	github.com/aliyun/alibaba-cloud-sdk-go v1.62.382
 	github.com/gin-gonic/gin v1.9.0
 	github.com/prometheus/client_golang v1.15.0
@@ -15,12 +18,9 @@ require (
 
 require (
 	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.10 // indirect
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
 	github.com/alibabacloud-go/endpoint-util v1.1.0 // indirect
 	github.com/alibabacloud-go/openapi-util v0.1.1 // indirect
-	github.com/alibabacloud-go/tea v1.2.2 // indirect
-	github.com/alibabacloud-go/tea-utils/v2 v2.0.6 // indirect
 	github.com/alibabacloud-go/tea-xml v1.1.3 // indirect
 	github.com/aliyun/credentials-go v1.3.10 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

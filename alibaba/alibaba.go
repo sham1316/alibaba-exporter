@@ -4,6 +4,10 @@ import (
 	"alibaba-exporter/config"
 	"alibaba-exporter/metrics"
 	"context"
+	"strconv"
+	"strings"
+	"time"
+
 	bssopenapi20171214 "github.com/alibabacloud-go/bssopenapi-20171214/v6/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
@@ -14,15 +18,13 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type Alibaba interface {
 	GetAccountBalance(ctx context.Context) float64
 	MainLoop(ctx context.Context)
 	GetPrepaidTraffic(ctx context.Context) float64
+	GetPrepaidCommodities(ctx context.Context) map[string]float64
 }
 
 type alibaba struct {
@@ -92,15 +94,43 @@ func (a *alibaba) GetPrepaidTraffic(ctx context.Context) (totalTraffic float64) 
 			instance := _result.Body.Data.Instances.Instance[i]
 			zap.S().Debugf("Instance(%s): %s %s (%s)", *instance.InstanceId, *instance.RemainingAmount, *instance.RemainingAmountUnit, *instance.Status)
 			if *instance.Status == "Available" {
-				size, _ := strconv.ParseFloat(*instance.RemainingAmount, 64)
-				totalTraffic += size * unit2multi(*instance.RemainingAmountUnit)
-				zap.S().Debugf("%f total:  %f", size, totalTraffic)
+				if *instance.CommodityCode == "flowbag_intl" {
+					size, _ := strconv.ParseFloat(*instance.RemainingAmount, 64)
+					totalTraffic += size * unit2multi(*instance.RemainingAmountUnit)
+					zap.S().Debugf("%f total:  %f", size, totalTraffic)
+				}
 			}
 		}
 	}
 	return
 }
 
+func (a *alibaba) GetPrepaidCommodities(ctx context.Context) map[string]float64 {
+	commodities := make(map[string]float64)
+	_pageSize := int32(100)
+	request := &bssopenapi20171214.QueryResourcePackageInstancesRequest{
+		PageSize: &_pageSize,
+	}
+	// TODO getAllPages
+	runtime := &util.RuntimeOptions{}
+	if _result, _err := a.client20171214.QueryResourcePackageInstancesWithOptions(request, runtime); _err != nil {
+		zap.S().Warn(_err)
+		return commodities
+	} else {
+		for i := range _result.Body.Data.Instances.Instance {
+			instance := _result.Body.Data.Instances.Instance[i]
+			zap.S().Debugf("Instance(%s): %s %s (%s)", *instance.InstanceId, *instance.RemainingAmount, *instance.RemainingAmountUnit, *instance.Status)
+			if *instance.Status == "Available" {
+				size, _ := strconv.ParseFloat(*instance.RemainingAmount, 64)
+				commodities[*instance.CommodityCode] += size * unit2multi(*instance.RemainingAmountUnit)
+				zap.S().Debugf("%s - %f total:  %f", *instance.CommodityCode, size, commodities[*instance.CommodityCode])
+			}
+		}
+	}
+	return commodities
+}
+
+const CU = 1
 const KB = 1024
 const MB = 1024 * KB
 const GB = 1024 * MB
@@ -117,6 +147,8 @@ func unit2multi(unit string) float64 {
 	case "KB":
 		return KB
 	case "Byte":
+		return 1
+	case "CU":
 		return 1
 	}
 	return 0
@@ -184,6 +216,11 @@ func (a *alibaba) MainLoop(ctx context.Context) {
 func (a *alibaba) getAlibabaMetrics(ctx context.Context) {
 	start := time.Now()
 	zap.S().Infof("%s start getAlibaba", start)
+	commodities := a.GetPrepaidCommodities(ctx)
+	a.counters.PrepaidCommodities.Reset()
+	for comodity, value := range commodities {
+		a.counters.PrepaidCommodities.WithLabelValues(comodity).Set(value)
+	}
 	a.counters.PrepaidTraffic.Set(a.GetPrepaidTraffic(ctx))
 	a.counters.AvailableAmount.Set(a.GetAccountBalance(ctx))
 	makeVector(a.counters.TotalInstances, a.GetAllAvailableInstance(ctx))

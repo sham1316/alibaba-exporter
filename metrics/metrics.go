@@ -2,14 +2,16 @@ package metrics
 
 import (
 	"alibaba-exporter/config"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Counters struct {
-	cfg             *config.Config
-	AvailableAmount prometheus.Gauge
-	PrepaidTraffic  prometheus.Gauge
-	TotalInstances  *prometheus.GaugeVec
+	cfg                *config.Config
+	AvailableAmount    prometheus.Gauge
+	PrepaidTraffic     prometheus.Gauge
+	TotalInstances     *prometheus.GaugeVec
+	PrepaidCommodities *prometheus.GaugeVec
 }
 
 func NewCounters(cfg *config.Config) *Counters {
@@ -47,4 +49,14 @@ func (c *Counters) register() {
 		})
 	prometheus.MustRegister(prepaidTraffic)
 	c.PrepaidTraffic = prepaidTraffic
+
+	prepaidCommodities := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "prepaid_commodities",
+			Help: "All prepaid commodities.",
+		},
+		[]string{"CommodityCode"},
+	)
+	prometheus.MustRegister(prepaidCommodities)
+	c.PrepaidCommodities = prepaidCommodities
 }
