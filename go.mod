@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/alibabacloud-go/bssopenapi-20171214/v6 v6.1.1
+	github.com/alibabacloud-go/cs-20151215/v7 v7.5.2
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.15
 	github.com/alibabacloud-go/ecs-20140526/v7 v7.6.0
 	github.com/alibabacloud-go/tea v1.4.0

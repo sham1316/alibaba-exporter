@@ -63,16 +63,14 @@ func (c *Counters) register() {
 	prometheus.MustRegister(prepaidCommodities)
 	c.PrepaidCommodities = prepaidCommodities
 
-	ecsInstances := prometheus.NewGaugeVec(
+	c.EcsInstances = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "ecs_instances",
 			Help: "Total ECS instances.",
 		},
-		[]string{"ProductCode", "SubscriptionType", "Region", "RenewStatus", "Status", "SubStatus"},
+		[]string{"Region", "ChargeType", "Type", "workload"},
 	)
-	prometheus.MustRegister(ecsInstances)
-	c.EcsInstances = ecsInstances
-	ecsInstances.Reset()
+	prometheus.MustRegister(c.EcsInstances)
 
 	c.EcsCpu = prometheus.NewGauge(
 		prometheus.GaugeOpts{

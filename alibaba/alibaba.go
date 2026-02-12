@@ -339,11 +339,29 @@ func (a *alibaba) getAlibabaMetrics(ctx context.Context) {
 	}
 	a.counters.EcsCpu.Set(cpu)
 	a.counters.EcsRam.Set(ram)
+	makeEcsVector(a.counters.EcsInstances, allRegionsInstances)
 
 	makeVector(a.counters.TotalInstances, a.GetAllAvailableInstance(ctx))
 	a.GetDiskList(ctx)
 	elapsed := time.Since(start)
 	zap.S().Infof("%s finish getAlibaba (took %s)", time.Now(), elapsed)
+}
+
+func makeEcsVector(vector *prometheus.GaugeVec, instanceList []*ecs20140526.DescribeInstancesResponseBodyInstancesInstance) {
+	vector.Reset()
+	for _, inst := range instanceList {
+		workload := "unknown"
+		if inst.GetTags() != nil {
+			tags := (*inst.GetTags()).GetTag()
+			for _, tag := range tags {
+				if *tag.TagKey == "workload" {
+					workload = *tag.TagValue
+				}
+			}
+		}
+		vector.WithLabelValues(*inst.GetRegionId(), *inst.GetInstanceChargeType(),
+			*inst.GetInstanceType(), workload).Add(1)
+	}
 }
 
 func unit2multi(unit string) float64 {
