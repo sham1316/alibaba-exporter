@@ -10,7 +10,10 @@ type Counters struct {
 	cfg                *config.Config
 	AvailableAmount    prometheus.Gauge
 	PrepaidTraffic     prometheus.Gauge
+	EcsCpu             prometheus.Gauge
+	EcsRam             prometheus.Gauge
 	TotalInstances     *prometheus.GaugeVec
+	EcsInstances       *prometheus.GaugeVec
 	PrepaidCommodities *prometheus.GaugeVec
 }
 
@@ -59,4 +62,30 @@ func (c *Counters) register() {
 	)
 	prometheus.MustRegister(prepaidCommodities)
 	c.PrepaidCommodities = prepaidCommodities
+
+	ecsInstances := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ecs_instances",
+			Help: "Total ECS instances.",
+		},
+		[]string{"ProductCode", "SubscriptionType", "Region", "RenewStatus", "Status", "SubStatus"},
+	)
+	prometheus.MustRegister(ecsInstances)
+	c.EcsInstances = ecsInstances
+	ecsInstances.Reset()
+
+	c.EcsCpu = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "ecs_cpu",
+			Help: "Total ECS CPU.",
+		})
+	prometheus.MustRegister(c.EcsCpu)
+
+	c.EcsRam = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "ecs_ram",
+			Help: "Total ECS RAM.",
+		})
+	prometheus.MustRegister(c.EcsRam)
+
 }
